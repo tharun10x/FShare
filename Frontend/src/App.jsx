@@ -1,10 +1,63 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import DeviceList from "./Components/DeviceList";
 import FileSender from "./Components/FileSender";
 
 export default function App() {
   const [selectedDevice, setSelectedDevice] = useState(null);
+  const [devices, setDevices] = useState([]);
+  const [connectionStatus, setConnectionStatus] = useState('Connecting...');
+  const [myDeviceName, setMyDeviceName] = useState(null);
+
+  // WebSocket connection at App level - persists across navigation
+  useEffect(() => {
+    const LAPTOP_IP = '192.168.29.243'; 
+    const ws = new WebSocket(`ws://${LAPTOP_IP}:8080`);
+    let myName = null;
+
+    ws.onopen = () => {
+      setConnectionStatus('Connected! Waiting for device list...');
+      console.log('Successfully connected to WebSocket server.');
+    };
+
+    ws.onerror = (error) => {
+      setConnectionStatus('Error connecting to server. Check IP/Firewall.');
+      console.error("WebSocket Error:", error);
+    };
+    
+    ws.onclose = () => {
+      setConnectionStatus('Connection closed.');
+      console.log('WebSocket connection closed.');
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const receivedData = JSON.parse(event.data);
+        console.log('Received device list:', receivedData);
+        
+        // On first message, identify our own device
+        if (!myName && receivedData.length > 0) {
+          const myDevice = receivedData[receivedData.length - 1];
+          myName = myDevice.name;
+          setMyDeviceName(myName);
+          console.log('My device name:', myName);
+        }
+        
+        // Filter out our own device from the list
+        const otherDevices = receivedData.filter(d => d.name !== myName);
+        
+        // Add a delay before updating the device list (1 second delay)
+        setTimeout(() => {
+          setDevices(otherDevices);
+          setConnectionStatus(`${otherDevices.length} other device(s) available`);
+        }, 2000); // Adjust delay time in milliseconds (1000ms = 1 second)
+      } catch (e) {
+        console.error("Failed to parse JSON message from server:", event.data, e);
+      }
+    };
+
+    return () => ws.close();
+  }, []);
 
   return (
     <>
@@ -23,7 +76,12 @@ export default function App() {
               exit={{ x: 50, opacity: 0 }}
               transition={{ duration: 0.4 }}
             >
-              <DeviceList onSelect={setSelectedDevice} />
+              <DeviceList 
+                devices={devices}
+                connectionStatus={connectionStatus}
+                myDeviceName={myDeviceName}
+                onSelect={setSelectedDevice} 
+              />
             </motion.div>
           )}
 
@@ -37,6 +95,7 @@ export default function App() {
             >
               <FileSender
                 device={selectedDevice}
+                myDeviceName={myDeviceName}
                 onBack={() => setSelectedDevice(null)}
               />
             </motion.div>

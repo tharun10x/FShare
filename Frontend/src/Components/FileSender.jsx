@@ -24,7 +24,6 @@ export default function FileSender({ device, onBack }) {
 
       <h1 className="text-2xl font-semibold mb-1">Sending file to</h1>
       <h2 className="text-xl font-bold text-blue-600">{device.name}</h2>
-      <p className="text-sm text-gray-500">{device.ip}</p>
 
       {/* Choose File Button */}
       <div className="mt-8">
@@ -44,7 +43,7 @@ export default function FileSender({ device, onBack }) {
 
       {file && (
         <p className="mt-4 text-gray-700">
-          Selected: <span className="font-semibold">{file.name}</span>
+          Selected File: <span className="font-semibold">{file.name}</span>
         </p>
       )}
 

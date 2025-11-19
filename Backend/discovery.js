@@ -1,74 +1,73 @@
-const dgram = require("dgram");
-const WebSocket = require("ws");
-const os = require("os");
+const Websocket = require('ws');
+const ws = new Websocket.Server({ port: 8080 });
+let clients = [];
 
-const PORT = 41234;
-const MULTICAST_ADDR = "230.185.192.108";
-const devices = new Map(); // store devices by IP
-
-// UDP socket setup
-const udp = dgram.createSocket({ type: "udp4", reuseAddr: true });
-
-udp.on("message", (msg, rinfo) => {
-  const data = JSON.parse(msg.toString());
-  data.ip = rinfo.address;
-
-  devices.set(rinfo.address, {
-    name: data.name,
-    ip: rinfo.address,
-    lastSeen: Date.now(),
+function printClientListToConsole(clients) {
+  // Map through all connected clients to extract just the device info
+  const deviceList = clients.map(socket => {
+    // Add a fallback in case deviceInfo is somehow missing or null
+    return socket.deviceInfo || { name: 'Unknown Device', ip: 'N/A' };
   });
+  
+  console.log('--- Current Connected Devices ---');
+  console.log(JSON.stringify(deviceList, null, 2));
+  console.log('---------------------------------');
+}
 
-  broadcastToClients([...devices.values()]);
-});
-
-udp.bind(PORT, () => {
-  udp.addMembership(MULTICAST_ADDR);
-  console.log("UDP discovery running...");
-});
-
-// Broadcast this device every 2 sec
-setInterval(() => {
-  const message = Buffer.from(
-    JSON.stringify({
-      name: "Laptop", // change this per device
-      ip: getLocalIP(),
-    })
-  );
-
-  udp.send(message, 0, message.length, PORT, MULTICAST_ADDR);
-}, 2000);
-
-// Clean up stale devices
-setInterval(() => {
-  const now = Date.now();
-  for (let [ip, dev] of devices) {
-    if (now - dev.lastSeen > 6000) devices.delete(ip);
-  }
-  broadcastToClients([...devices.values()]);
-}, 3000);
-
-// Helper for local IP
-function getLocalIP() {
-  const nets = os.networkInterfaces();
-  for (let name of Object.keys(nets)) {
-    for (let net of nets[name]) {
-      if (net.family === "IPv4" && !net.internal) return net.address;
+// Broadcast the full device list to ALL connected clients
+function broadcastDeviceList() {
+  const deviceList = clients.map(socket => socket.deviceInfo);
+  const message = JSON.stringify(deviceList);
+  
+  clients.forEach(client => {
+    if (client.readyState === Websocket.OPEN) {
+      client.send(message);
     }
-  }
+  });
+  
+  console.log(`✅ Broadcasted list of ${deviceList.length} devices to all clients.`);
 }
 
-const wss = new WebSocket.Server({ port: 8080 });
-const clients = new Set();
+//Using the webscoket object we do operation for the connection
+ws.on('connection', (socket) => {
+  console.log('New client connected',socket.name);
+  // Add the new client to the list
 
-wss.on("connection", (ws) => {
-  clients.add(ws);
-  ws.send(JSON.stringify([...devices.values()]));
+  socket.id = Math.random().toString(36).substring(2, 9);
+  socket.deviceInfo = { 
+    name: `Device-${socket.id.toUpperCase()}`, 
+    ip: socket._socket.remoteAddress // Gets the client's actual IP
+  };
+  console.log('New client connected:', socket.deviceInfo.name);
+  clients.push(socket);
+  console.log('Total clients:', clients.length);
+  printClientListToConsole(clients);
+  
+  // Broadcast updated device list to ALL clients (including the new one)
+  broadcastDeviceList();
+  
+  socket.onmessage = (event) => {
+    const welcomeData = JSON.parse(event.data);
+    console.log("My device info:", welcomeData[0]);
+  };
+  
+  // Handle the object the clients closes the instances
+  socket.on('close', () => {
+    const disconnectedName = socket.deviceInfo ? socket.deviceInfo.name : 'Unknown';
+    console.log('Client disconnected:', disconnectedName);
+    
+    // 1. Filter the client out
+    clients = clients.filter((s) => s !== socket);
+    
+    console.log('Total clients remaining:', clients.length);
+    
+    // 2. Print the updated list to the console
+    printClientListToConsole(clients);
+    
+    // 3. Broadcast updated list to remaining clients
+    broadcastDeviceList();
+  });
+})
 
-  ws.on("close", () => clients.delete(ws));
-});
+console.log('WebSocket server is running on ws://localhost:8080');
 
-function broadcastToClients(list) {
-  const data = JSON.stringify(list);
-  clients.forEach((ws) => ws.send(data));
-}
