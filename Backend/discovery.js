@@ -1,73 +1,140 @@
-const Websocket = require('ws');
-const ws = new Websocket.Server({ port: 8080 });
-let clients = [];
+const WebSocket = require('ws');
+const wss = new WebSocket.Server({ port: 8081 });
 
-function printClientListToConsole(clients) {
-  // Map through all connected clients to extract just the device info
-  const deviceList = clients.map(socket => {
-    // Add a fallback in case deviceInfo is somehow missing or null
-    return socket.deviceInfo || { name: 'Unknown Device', ip: 'N/A' };
-  });
-  
-  console.log('--- Current Connected Devices ---');
-  console.log(JSON.stringify(deviceList, null, 2));
-  console.log('---------------------------------');
-}
+let clients = new Map(); // id → socket + device info
 
-// Broadcast the full device list to ALL connected clients
 function broadcastDeviceList() {
-  const deviceList = clients.map(socket => socket.deviceInfo);
-  const message = JSON.stringify(deviceList);
-  
-  clients.forEach(client => {
-    if (client.readyState === Websocket.OPEN) {
-      client.send(message);
+  const list = [...clients.values()].map(c => c.deviceInfo);
+
+  const message = JSON.stringify({
+    type: "device-list",
+    data: list
+  });
+
+  clients.forEach(c => {
+    if (c.socket.readyState === WebSocket.OPEN) {
+      c.socket.send(message);
     }
   });
-  
-  console.log(`✅ Broadcasted list of ${deviceList.length} devices to all clients.`);
+
+  console.log("\n========== DEVICE LIST ==========");
+  console.log(`Total devices: ${list.length}`);
+  list.forEach((device, index) => {
+    console.log(`  ${index + 1}. ${device.name} (${device.id}) - ${device.ip}`);
+  });
+  console.log("=================================\n");
 }
 
-//Using the webscoket object we do operation for the connection
-ws.on('connection', (socket) => {
-  console.log('New client connected',socket.name);
-  // Add the new client to the list
+// function handleOffer(data, ws) {
+//   wss.clients.forEach(function each(client) {
+//     if (client !== ws && client.readyState === WebSocket.OPEN) {
+//       client.send(JSON.stringify({
+//         type: 'offer',
+//         offer: data.offer,
+//         from: data.from,
+//         to: data.to
+//       }));
+//     }
+//   });
+// }
 
-  socket.id = Math.random().toString(36).substring(2, 9);
-  socket.deviceInfo = { 
-    name: `Device-${socket.id.toUpperCase()}`, 
-    ip: socket._socket.remoteAddress // Gets the client's actual IP
-  };
-  console.log('New client connected:', socket.deviceInfo.name);
-  clients.push(socket);
-  console.log('Total clients:', clients.length);
-  printClientListToConsole(clients);
+// function handleAnswer(data, ws) {
+//   wss.clients.forEach(function each(client) {
+//     if (client !== ws && client.readyState === WebSocket.OPEN) {
+//       client.send(JSON.stringify({
+//         type: 'answer',
+//         answer: data.answer,
+//         from: data.from,
+//         to: data.to
+//       }));
+//     }
+//   });
+// }
+
+// function handleCandidate(data, ws) {
+//   wss.clients.forEach(function each(client) {
+//     if (client !== ws && client.readyState === WebSocket.OPEN) {
+//       client.send(JSON.stringify({
+//         type: 'candidate',
+//         candidate: data.candidate,
+//         from: data.from,
+//         to: data.to
+//       }));
+//     }
+//   });
+// }
+
+wss.on('connection', (socket, req) => {
+  const id = Math.random().toString(36).substring(2, 9).toUpperCase();
   
-  // Broadcast updated device list to ALL clients (including the new one)
+  const deviceInfo = {
+    id,
+    name: `Device-${id}`,
+    ip: req.socket.remoteAddress
+  };
+  
+
+  clients.set(id, { socket, deviceInfo });
+
+  console.log("Client connected:", deviceInfo);
+
   broadcastDeviceList();
-  
-  socket.onmessage = (event) => {
-    const welcomeData = JSON.parse(event.data);
-    console.log("My device info:", welcomeData[0]);
-  };
-  
-  // Handle the object the clients closes the instances
+
+  socket.on('message', (data) => {
+    try {
+      const text = typeof data === 'string' ? data : data.toString('utf8');
+      const msg = JSON.parse(text);
+      console.log('Received message:', msg);
+      
+       switch (msg.type) {
+      case "offer":
+      sendTo(msg.to, {
+        type: "offer",
+        from: id,
+        offer: msg.offer
+      });
+      break;
+
+      case "answer":
+      sendTo(msg.to, {
+        type: "answer",
+        from: id,
+        answer: msg.answer
+      });
+      break;
+
+      case "candidate":
+      sendTo(msg.to, {
+        type: "candidate",
+        from: id,
+        candidate: msg.candidate
+      });
+      break;
+
+      default:
+      console.log("Unknown message:", msg);
+      }
+      // Add your message handling logic here
+      // For example: file transfer, signaling, etc.
+      
+    } catch (err) {
+      let preview;
+      try {
+        preview = (typeof data === 'string') ? data.slice(0, 200) : (data && data.toString ? data.toString('utf8', 0, 200) : String(data));
+      } catch (e) {
+        preview = '<unserializable data>';
+      }
+      console.error('Failed to parse message:', err.message, 'preview:', preview);
+    }
+  });
+
   socket.on('close', () => {
-    const disconnectedName = socket.deviceInfo ? socket.deviceInfo.name : 'Unknown';
-    console.log('Client disconnected:', disconnectedName);
-    
-    // 1. Filter the client out
-    clients = clients.filter((s) => s !== socket);
-    
-    console.log('Total clients remaining:', clients.length);
-    
-    // 2. Print the updated list to the console
-    printClientListToConsole(clients);
-    
-    // 3. Broadcast updated list to remaining clients
+    console.log("Client disconnected:", deviceInfo.name);
+    clients.delete(id);
     broadcastDeviceList();
   });
-})
+});
 
-console.log('WebSocket server is running on ws://localhost:8080');
+console.log("WebSocket server running on ws://localhost:8081");
 
+  

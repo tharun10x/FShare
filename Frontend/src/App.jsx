@@ -12,7 +12,7 @@ export default function App() {
   // WebSocket connection at App level - persists across navigation
   useEffect(() => {
     const LAPTOP_IP = '192.168.29.243'; 
-    const ws = new WebSocket(`ws://${LAPTOP_IP}:8080`);
+    const ws = new WebSocket(`ws://${LAPTOP_IP}:8081`);
     let myName = null;
 
     ws.onopen = () => {
@@ -31,30 +31,39 @@ export default function App() {
     };
 
     ws.onmessage = (event) => {
-      try {
-        const receivedData = JSON.parse(event.data);
-        console.log('Received device list:', receivedData);
-        
-        // On first message, identify our own device
-        if (!myName && receivedData.length > 0) {
-          const myDevice = receivedData[receivedData.length - 1];
-          myName = myDevice.name;
-          setMyDeviceName(myName);
-          console.log('My device name:', myName);
-        }
-        
-        // Filter out our own device from the list
-        const otherDevices = receivedData.filter(d => d.name !== myName);
-        
-        // Add a delay before updating the device list (1 second delay)
-        setTimeout(() => {
-          setDevices(otherDevices);
-          setConnectionStatus(`${otherDevices.length} other device(s) available`);
-        }, 2000); // Adjust delay time in milliseconds (1000ms = 1 second)
-      } catch (e) {
-        console.error("Failed to parse JSON message from server:", event.data, e);
-      }
-    };
+    try {
+    const msg = JSON.parse(event.data);
+    console.log("Received:", msg);
+
+    if (msg.type !== "device-list") {
+      console.log("Ignoring non-device-list message");
+      return;
+    }
+
+    const receivedData = msg.data; // THIS IS THE DEVICE ARRAY
+
+    console.log("Received device list:", receivedData);
+
+    // Identify OUR device (last one added)
+    if (!myName && receivedData.length > 0) {
+      const myDevice = receivedData[receivedData.length - 1];
+      myName = myDevice.name;
+      setMyDeviceName(myName);
+      console.log("My device name:", myName);
+    }
+
+    const otherDevices = receivedData.filter(d => d.name !== myName);
+
+    setTimeout(() => {
+      setDevices(otherDevices);
+      setConnectionStatus(` Connected - ${otherDevices.length} Devices `);
+    }, 2000);
+
+  } catch (e) {
+    console.error("Failed to parse JSON:", event.data, e);
+  }
+};
+  
 
     return () => ws.close();
   }, []);
@@ -62,9 +71,9 @@ export default function App() {
   return (
     <>
     <div className="head">
-      <h1 className="my-6 text-4xl font-bold text-center text-gray-800"><span className="text-blue-600">F</span>Share</h1>
+      <h1 className="my-4 text-4xl font-bold text-center text-gray-800"><span className="text-blue-600">F</span>Share</h1>
     </div>
-    <div className="flex items-center justify-center h-[100vh] bg-gray-100">
+    <div className="flex items-center justify-center h-[100vh] w-full bg-gray-100">
       <div className="bg-white shadow-xl rounded-2xl p-6 w-full h-[80vh] max-w-lg relative overflow-hidden">
 
         <AnimatePresence mode="wait">
