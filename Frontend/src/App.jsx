@@ -8,29 +8,31 @@ export default function App() {
   const [devices, setDevices] = useState([]);
   const [connectionStatus, setConnectionStatus] = useState('Connecting...');
   const [myDeviceName, setMyDeviceName] = useState(null);
+  const [ws, setWs] = useState(null);
 
   // WebSocket connection at App level - persists across navigation
   useEffect(() => {
     const LAPTOP_IP = '192.168.29.243'; 
-    const ws = new WebSocket(`ws://${LAPTOP_IP}:8081`);
+    const wsConnection = new WebSocket(`ws://${LAPTOP_IP}:8081`);
+    setWs(wsConnection);
     let myName = null;
 
-    ws.onopen = () => {
+    wsConnection.onopen = () => {
       setConnectionStatus('Connected! Waiting for device list...');
       console.log('Successfully connected to WebSocket server.');
     };
 
-    ws.onerror = (error) => {
+    wsConnection.onerror = (error) => {
       setConnectionStatus('Error connecting to server. Check IP/Firewall.');
       console.error("WebSocket Error:", error);
     };
     
-    ws.onclose = () => {
+    wsConnection.onclose = () => {
       setConnectionStatus('Connection closed.');
       console.log('WebSocket connection closed.');
     };
 
-    ws.onmessage = (event) => {
+    wsConnection.onmessage = (event) => {
     try {
     const msg = JSON.parse(event.data);
     console.log("Received:", msg);
@@ -65,7 +67,7 @@ export default function App() {
 };
   
 
-    return () => ws.close();
+    return () => wsConnection.close();
   }, []);
 
   return (
@@ -89,7 +91,8 @@ export default function App() {
                 devices={devices}
                 connectionStatus={connectionStatus}
                 myDeviceName={myDeviceName}
-                onSelect={setSelectedDevice} 
+                onSelect={setSelectedDevice}
+                ws={ws}
               />
             </motion.div>
           )}

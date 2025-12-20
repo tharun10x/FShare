@@ -1,84 +1,91 @@
 import { motion } from "framer-motion";
 
-// Normalize IP for display: remove IPv6-mapped prefix (::ffff:) and scope ids (%...),
-// and prefer extracting an IPv4 address when present.
 function normalizeIp(raw) {
   if (!raw) return '';
   const ip = String(raw);
-
-  // Prefer explicit IPv4 if present anywhere in the string
   const ipv4Match = ip.match(/\d+\.\d+\.\d+\.\d+/);
   if (ipv4Match) return ipv4Match[0];
-
-  // Remove scope id like '%eth0' from IPv6 addresses
   const pct = ip.indexOf('%');
   if (pct !== -1) return ip.substring(0, pct);
-
-  // Fallback: return original (could be IPv6)
   return ip;
 }
 
-export default function DeviceList({ devices, connectionStatus, myDeviceName, onSelect }) { 
+export default function DeviceList({ devices, connectionStatus, myDeviceName, onSelect, ws }) {
+
+  function startConnection(targetId) {
+    if (!ws) {
+      console.error("WebSocket not initialized yet");
+      return;
+    }
+    if (ws.readyState !== WebSocket.OPEN) {
+      console.error(`Socket state is ${ws.readyState}, not OPEN (1). Cannot send message.`);
+      return;
+    }
+
+    ws.send(JSON.stringify({
+      type: "start-webrtc",
+      to: targetId
+    }));
+    console.log('Sent start-webrtc message to device:', targetId);
+  }
 
   return (
-    <div className="p-6 text-center h-full ">
-    <p className="text-2xl mb-2">You are: <span className="font-semibold ">{myDeviceName ? myDeviceName : 'N/A'}</span></p>
+    <div className="h-full p-6 text-center">
+
+      <p className="mb-2 text-2xl">
+        You are: <span className="font-semibold">{myDeviceName ?? 'N/A'}</span>
+      </p>
+
       <motion.h1
-        className="mb-8 text-3xl font-bold text-black-600"
+        className="mb-8 text-3xl font-bold"
         initial={{ opacity: 0, x: -5 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.7 }}
       >
         Available Devices
       </motion.h1>
-      
-      {/* Display Connection Status */}
-      <div className="bg-blue-400 p-2 rounded-2xl  shadow w-fit flex justify-center mx-auto">
+
+      <div className="flex justify-center p-2 mx-auto bg-blue-400 shadow rounded-2xl w-fit">
         <p className="text-sm font-semibold text-blue-950">Status: {connectionStatus}</p>
       </div>
-      
 
       <div className="flex flex-col top-20">
         {devices.length === 0 ? (
-          <div className="">
           <p className="text-xl text-gray-700">No other devices connected.</p>
-          </div>
         ) : (
           devices.map((d, index) => (
             <motion.button
-              key={d.ip}
-              onClick={() => onSelect(d)}
-              className="flex items-center gap-6 p-4 mt-6 w-auto text-white bg-blue-500 shadow-lg hover:bg-blue-600 rounded-xl"
+              key={d.id}  // ❗ use id, not ip
+              onClick={() => {
+                onSelect(d);
+                startConnection(d.id);
+              }}
+              disabled={!ws || ws.readyState !== WebSocket.OPEN}
+              className={`flex items-center w-auto gap-6 p-4 mt-6 text-white shadow-lg rounded-xl ${
+                !ws || ws.readyState !== WebSocket.OPEN
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-blue-500 hover:bg-blue-600'
+              }`}
               initial={{ opacity: 0, scale: 0.5 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{
-                duration: 0.9,
-                delay: index * 0.12,
-                type: "spring",
-              }}
+              transition={{ duration: 0.9, delay: index * 0.12, type: "spring" }}
               whileTap={{ scale: 0.9 }}
               whileHover={{ scale: 1.02 }}
             >
-              <div className="flex items-center justify-center w-12 h-10 md:w-16 md:h-16 text-xl md:text-2xl font-bold text-blue-600 bg-white rounded-full shadow">
+              <div className="flex items-center justify-center w-12 h-10 text-xl font-bold text-blue-600 bg-white rounded-full shadow">
                 {d.name.charAt(0)}
               </div>
+
               <div className="text-left">
-              <span className="sm:text-lg text-sm font-bold mb-1 inline-block w-full">{d.name}</span>
-              
-              <span className="sm:text-lg text-sm text-gray-100 mb-1 inline-block w-full">{normalizeIp(d.ip)}</span>
+                <span className="block mb-1 text-sm font-bold sm:text-lg">{d.name}</span>
+                <span className="block mb-1 text-sm text-gray-100 sm:text-lg">{normalizeIp(d.ip)}</span>
               </div>
-              
-              <div className="bg-[#65e63d] w-2 h-2 sm:w-3 sm:h-3 rounded-full ml-auto mr-2 "></div>
+
+              <div className="bg-[#65e63d] w-3 h-3 rounded-full ml-auto mr-2"></div>
             </motion.button>
           ))
         )}
       </div>
-      <div className=" text-center mt-10 ">
-          <img className="justify-center mx-auto" src="tablet-and-laptop.png " alt="" width="80" />
-         <h1 className="text-2xl mt-2">Open FShare on another device.</h1>
-          <p>Open this site in another browser.</p><p>Only devices in the same network are shown.</p>
-      </div> 
-      
     </div>
   );
 }

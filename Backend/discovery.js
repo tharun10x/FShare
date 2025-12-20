@@ -1,28 +1,10 @@
 const WebSocket = require('ws');
 const wss = new WebSocket.Server({ port: 8081 });
+const clients = require('./client')
+const broadcastDeviceList = require('./broadcastDeviceList')
+const {handleMessage} = require('./signaling')
 
-let clients = new Map();
-function broadcastDeviceList() {
-  const list = [...clients.values()].map(c => c.deviceInfo);
 
-  const message = JSON.stringify({
-    type: "device-list",
-    data: list
-  });
-
-  clients.forEach(c => {
-    if (c.socket.readyState === WebSocket.OPEN) {
-      c.socket.send(message);
-    }
-  });
-
-  console.log("\n========== DEVICE LIST ==========");
-  console.log(`Total devices: ${list.length}`);
-  list.forEach((device, index) => {
-    console.log(`  ${index + 1}. ${device.name} (${device.id}) - ${device.ip}`);
-  });
-  console.log("=================================\n");
-}
 
 wss.on('connection', (socket, req) => {
   const id = Math.random().toString(36).substring(2, 9).toUpperCase();
@@ -34,12 +16,28 @@ wss.on('connection', (socket, req) => {
   };
   
 
-  clients.set(id, { socket, deviceInfo });
+  clients.set(
+    id,
+    { socket, deviceInfo }
+    );
 
   console.log("Client connected:", deviceInfo);
 
   broadcastDeviceList();
-
+  
+  socket.on('message', (raw) => {
+    let msg;
+    try { 
+      msg = JSON.parse(raw);
+      handleMessage(msg.to, socket, msg.type)
+      console.log('Received message:', msg);
+     }
+    catch(err) { 
+      console.error('Failed to parse message:', err);
+      return; 
+    }
+    // handleMessage(id, socket, msg);
+  });
   socket.on('close', () => {
     console.log("Client disconnected:", deviceInfo.name);
     clients.delete(id);
@@ -48,5 +46,6 @@ wss.on('connection', (socket, req) => {
 });
 
 
-console.log("WebSocket server running on ws://localhost:8081");
+
+console.log("WebSocket server running on ws://192.168.29.243:8081");
 
