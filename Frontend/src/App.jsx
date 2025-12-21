@@ -42,7 +42,7 @@ export default function App() {
       return;
     }
 
-    const receivedData = msg.data; // THIS IS THE DEVICE ARRAY
+    const receivedData = msg.payload.devices; // THIS IS THE DEVICE ARRAY
 
     console.log("Received device list:", receivedData);
 

@@ -23,8 +23,11 @@ export default function DeviceList({ devices, connectionStatus, myDeviceName, on
     }
 
     ws.send(JSON.stringify({
-      type: "start-webrtc",
-      to: targetId
+      type: "connection-request",
+      payload:{
+        targetId: targetId
+      }
+      
     }));
     console.log('Sent start-webrtc message to device:', targetId);
   }
