@@ -1,5 +1,4 @@
 const client = require('./client');
-// ❌ REMOVED: const pc = new RTCPeerConnection();
 
 function sendError(clientId, errMsg){
     const sender = client.get(clientId);

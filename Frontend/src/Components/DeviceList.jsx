@@ -10,27 +10,17 @@ function normalizeIp(raw) {
   return ip;
 }
 
-export default function DeviceList({ devices, connectionStatus, myDeviceName, onSelect, ws }) {
+export default function DeviceList({ 
+  devices,
+  connectedPeers,
+  connectionStatus,
+  myDeviceName,
+  onSelect,
+  // ws
+  onConnect
+ }) 
+{
 
-  function startConnection(targetId) {
-    if (!ws) {
-      console.error("WebSocket not initialized yet");
-      return;
-    }
-    if (ws.readyState !== WebSocket.OPEN) {
-      console.error(`Socket state is ${ws.readyState}, not OPEN (1). Cannot send message.`);
-      return;
-    }
-
-    ws.send(JSON.stringify({
-      type: "connection-request",
-      payload:{
-        targetId: targetId
-      }
-      
-    }));
-    console.log('Sent start-webrtc message to device:', targetId);
-  }
 
   return (
     <div className="h-full p-6 text-center">
@@ -61,14 +51,9 @@ export default function DeviceList({ devices, connectionStatus, myDeviceName, on
               key={d.id}  // ❗ use id, not ip
               onClick={() => {
                 onSelect(d);
-                startConnection(d.id);
+                onConnect(d);
               }}
-              disabled={!ws || ws.readyState !== WebSocket.OPEN}
-              className={`flex items-center w-auto gap-6 p-4 mt-6 text-white shadow-lg rounded-xl ${
-                !ws || ws.readyState !== WebSocket.OPEN
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-blue-500 hover:bg-blue-600'
-              }`}
+              className="flex items-center w-auto gap-6 p-4 mt-6 text-white bg-blue-500 shadow-lg rounded-xl hover:bg-blue-600"
               initial={{ opacity: 0, scale: 0.5 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.9, delay: index * 0.12, type: "spring" }}

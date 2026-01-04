@@ -27,6 +27,15 @@ wss.on('connection', (socket, req) => {
   }));
 
   broadcastDeviceList();
+   const pingInterval = setInterval(() => {
+    if (socket.readyState === 1) {  // OPEN
+      socket.ping();
+    }
+  }, 30000);  // Every 30 seconds
+  
+  socket.on('pong', () => {
+    console.log(`📡 Pong from ${id}`);
+  });
   
   socket.on('message', (raw) => {
     try { 
